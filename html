@@ -1,0 +1,2179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Python-Based Garden Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.26.1/full/pyodide.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+        
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #F5F7F8;
+            background-image: radial-gradient(#DCE8EF 1px, transparent 1px);
+            background-size: 20px 20px;
+            color: #344A57;
+        }
+        .code-font { font-family: 'JetBrains Mono', monospace; }
+        
+        .wood-panel {
+            background: linear-gradient(145deg, #DDEAF2, #F7F9FA);
+            border: 2px solid #A7B9C4;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.4), inset 0 1px 1px rgba(255,255,255,0.1);
+        }
+        
+        .soil-panel {
+            background: #FFFFFF;
+            border: 2px solid #DDEAF2;
+            box-shadow: inset 0 4px 12px rgba(0,0,0,0.6);
+        }
+
+        .sky-panel {
+            background: linear-gradient(180deg, #DDEAF2 0%, #F5F7F8 100%);
+            border: 2px solid #8EADC0;
+        }
+
+        .rain-panel {
+            background: linear-gradient(180deg, #AFC9D8 0%, #607D94 100%) !important;
+            border: 2px solid #789DB5 !important;
+        }
+
+        .elnino-panel {
+            background: linear-gradient(180deg, #D5C4AE 0%, #E8DFD1 100%) !important;
+            border: 2px solid #B5A28B !important;
+        }
+
+        .locked {
+            opacity: 0.3;
+            pointer-events: none;
+            filter: grayscale(80%) blur(1px);
+            transition: all 0.4s ease;
+        }
+        .unlocked {
+            opacity: 1;
+            pointer-events: auto;
+            filter: blur(0);
+        }
+
+
+        /* 3D Hierarchical Seed Tree
+           Only the existing hierarchy panel uses these styles. */
+        .seed-tree-3d {
+            padding: 10px 8px 9px;
+            overflow: hidden;
+            background:
+                radial-gradient(circle at 50% 20%, rgba(109, 76, 65, 0.22), transparent 42%),
+                linear-gradient(180deg, #120b08 0%, #1a0f0b 58%, #100806 100%);
+            border-color: #DDEAF2;
+        }
+
+        .seed-tree-scene {
+            position: relative;
+            min-height: 335px;
+            perspective: 900px;
+            transform-style: preserve-3d;
+        }
+
+        .seed-tree-root-wrap {
+            position: relative;
+            z-index: 5;
+            display: flex;
+            justify-content: center;
+            padding-top: 4px;
+        }
+
+        .seed-tree-node,
+        .seed-tree-category-node {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            box-sizing: border-box;
+            border-radius: 11px;
+            font-weight: 800;
+            white-space: nowrap;
+            transform-style: preserve-3d;
+            text-shadow: 0 1px 2px rgba(0,0,0,.8);
+        }
+
+        .seed-tree-root {
+            width: 92px;
+            min-height: 58px;
+            flex-direction: column;
+            gap: 1px;
+            padding: 6px 8px;
+            color: #fff7ed;
+            font-size: 12px;
+            background: linear-gradient(145deg, #a76ee8 0%, #60319a 72%, #43236e 100%);
+            border: 1px solid #d5a9ff;
+            box-shadow:
+                0 5px 0 #32194f,
+                0 9px 15px rgba(0,0,0,.45),
+                inset 0 1px 1px rgba(255,255,255,.35);
+            transform: rotateX(7deg) translateZ(18px);
+        }
+
+        .seed-tree-root::after {
+            content: "";
+            position: absolute;
+            left: 8px;
+            right: -6px;
+            bottom: -5px;
+            height: 8px;
+            border-radius: 0 0 8px 8px;
+            background: #3b205f;
+            transform: translateZ(-7px) skewX(-25deg);
+            opacity: .9;
+        }
+
+        .seed-tree-icon {
+            font-size: 13px;
+            line-height: 1;
+        }
+
+        .seed-tree-name {
+            line-height: 1.05;
+        }
+
+        .seed-tree-level {
+            font-size: 7px;
+            letter-spacing: .08em;
+            color: #ead7ff;
+            font-weight: 700;
+        }
+
+        .seed-tree-trunk {
+            position: absolute;
+            z-index: 2;
+            top: 62px;
+            left: 50%;
+            width: 2px;
+            height: 19px;
+            background: linear-gradient(#b982e9, #8b5bb7);
+            box-shadow: 0 0 5px rgba(185,130,233,.35);
+        }
+
+        .seed-tree-trunk::after {
+            content: "";
+            position: absolute;
+            left: 50%;
+            top: 18px;
+            width: calc(100% - 16px);
+            min-width: 210px;
+            max-width: 270px;
+            height: 2px;
+            background: #8f623e;
+            transform: translateX(-50%);
+            box-shadow: 0 1px 0 rgba(255,255,255,.06);
+        }
+
+        .seed-tree-branches {
+            position: relative;
+            z-index: 3;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+            padding: 27px 2px 0;
+        }
+
+        .seed-tree-category {
+            position: relative;
+            min-width: 0;
+        }
+
+        .seed-tree-category::before {
+            content: "";
+            position: absolute;
+            top: -27px;
+            left: 50%;
+            height: 27px;
+            width: 2px;
+            background: #8f623e;
+            box-shadow: 0 0 4px rgba(143,98,62,.35);
+        }
+
+        .seed-tree-category-node {
+            min-height: 36px;
+            padding: 6px 4px;
+            color: #fff7ed;
+            font-size: 10px;
+            border: 1px solid;
+            box-shadow:
+                0 4px 0 rgba(0,0,0,.42),
+                0 8px 12px rgba(0,0,0,.34),
+                inset 0 1px 1px rgba(255,255,255,.25);
+            transform: rotateX(8deg) translateZ(10px);
+        }
+
+        .flowers .seed-tree-category-node {
+            background: linear-gradient(145deg, #c13b78, #741c4d);
+            border-color: #dc6298;
+        }
+
+        .vegetables .seed-tree-category-node {
+            background: linear-gradient(145deg, #5e9d2e, #326c16);
+            border-color: #83c65a;
+        }
+
+        .fruits .seed-tree-category-node {
+            background: linear-gradient(145deg, #d87821, #91470f);
+            border-color: #ef9a43;
+        }
+
+        .seed-tree-category-stem {
+            position: relative;
+            width: 2px;
+            height: 12px;
+            margin: 0 auto;
+            background: #8f623e;
+        }
+
+        .seed-tree-category-stem::after {
+            content: "";
+            position: absolute;
+            top: 11px;
+            left: 50%;
+            width: calc(100% + 24px);
+            min-width: 54px;
+            max-width: 78px;
+            height: 2px;
+            background: #8f623e;
+            transform: translateX(-50%);
+        }
+
+        .seed-tree-seeds {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+            padding: 9px 1px 0;
+        }
+
+        .seed-tree-seeds::before {
+            content: "";
+            position: absolute;
+            top: 9px;
+            bottom: 17px;
+            left: 50%;
+            width: 2px;
+            background: linear-gradient(#8f623e, rgba(143,98,62,.42));
+            transform: translateX(-50%);
+            z-index: 0;
+        }
+
+        .seed-tree-leaf {
+            z-index: 1;
+            min-height: 29px;
+            padding: 5px 4px;
+            color: #f7e9df;
+            font-size: 9px;
+            background: linear-gradient(145deg, #594036 0%, #33231d 72%, #271914 100%);
+            border: 1px solid #896c5c;
+            box-shadow:
+                0 3px 0 #1d120e,
+                0 6px 9px rgba(0,0,0,.3),
+                inset 0 1px 1px rgba(255,255,255,.14);
+            transform: perspective(500px) rotateX(5deg) translateZ(6px);
+        }
+
+        .seed-tree-leaf::before {
+            content: "";
+            position: absolute;
+            left: 50%;
+            top: -9px;
+            width: 2px;
+            height: 9px;
+            background: #8f623e;
+            transform: translateX(-50%);
+        }
+
+        .seed-tree-leaf::after {
+            content: "";
+            position: absolute;
+            right: -4px;
+            bottom: -3px;
+            width: 100%;
+            height: 100%;
+            border-radius: 10px;
+            background: rgba(52,35,29,.7);
+            transform: translateZ(-5px) skewX(-10deg);
+            z-index: -1;
+        }
+
+        .seed-tree-legend {
+            position: relative;
+            margin-top: 10px;
+            text-align: center;
+            color: #c98b35;
+            font-size: 8px;
+            font-weight: 700;
+            letter-spacing: .03em;
+        }
+
+        @media (max-width: 420px) {
+            .seed-tree-scene { min-height: 320px; }
+            .seed-tree-root { width: 82px; }
+            .seed-tree-category-node { font-size: 9px; }
+            .seed-tree-leaf { font-size: 8px; }
+            .seed-tree-branches { gap: 5px; }
+        }
+
+        /* Planting & Growth Process — simple hierarchical tree visual */
+        .growth-process {
+            padding: 8px 2px 4px;
+            overflow: hidden;
+        }
+        .growth-tree {
+            display:flex; flex-direction:column; align-items:center;
+            width:100%; position:relative;
+        }
+        .growth-level {
+            display:flex; justify-content:center; align-items:flex-start;
+            gap:7px; width:100%; position:relative;
+        }
+        .growth-level.single { gap:0; }
+        .growth-connector-v {
+            width:2px; height:10px; background:#A7B9C4; margin:0 auto;
+        }
+        .growth-children-connector {
+            width:100%; height:10px; position:relative;
+        }
+        .growth-children-connector::before {
+            content:""; position:absolute; left:16%; right:16%; top:0;
+            height:1px; background:#A7B9C4;
+        }
+        .growth-children-connector.two::before { left:25%; right:25%; }
+        .growth-children-connector.three::before { left:16%; right:16%; }
+        .growth-child {
+            flex:0 1 auto; min-width:0; display:flex; flex-direction:column;
+            align-items:center; position:relative;
+        }
+        .growth-child::before {
+            content:""; width:2px; height:10px; background:#A7B9C4;
+            margin-top:-1px;
+        }
+        .growth-node {
+            position:relative; width:60px; min-height:55px; padding:5px 3px;
+            border:1px solid #A7B9C4; border-radius:10px;
+            background:linear-gradient(145deg,#DDEAF2,#F7F9FA);
+            box-shadow:0 4px 0 #C5D4DC,0 7px 12px rgba(0,0,0,.25),inset 0 1px rgba(255,255,255,.12);
+            transform:rotateX(7deg) rotateY(-4deg); transition:.25s ease;
+            text-align:center; z-index:2;
+        }
+        .growth-node.active {
+            transform:translateY(-3px) rotateX(7deg) rotateY(-4deg);
+            border-color:#789DB5;
+            box-shadow:0 4px 0 #607D94,0 9px 16px rgba(245,158,11,.2),inset 0 1px rgba(255,255,255,.18);
+        }
+        .growth-node.done { opacity:.8; }
+        .growth-icon { font-size:18px; line-height:1; }
+        .growth-label { margin-top:3px; font-size:7px; font-weight:800; color:#40515C; line-height:1.1; }
+        .growth-step { font-size:6px; color:#718590; margin-top:2px; }
+        @media (max-width:760px) {
+            .growth-level { gap:4px; }
+            .growth-node { width:52px; min-height:50px; padding:4px 2px; }
+            .growth-icon { font-size:15px; }
+            .growth-label { font-size:6px; }
+        }
+
+        /* Seed Tree Traversal */
+        .traversal-panel { width:100%; }
+        .traversal-tree { overflow:hidden; padding:14px 8px 8px; perspective:900px; }
+        .tr-level { display:flex; justify-content:center; align-items:flex-start; width:100%; position:relative; transform:scale(.82); transform-origin:top center; margin-bottom:-48px; }
+        .tr-branch { display:flex; flex-direction:column; align-items:center; position:relative; min-width:0; }
+        .tr-node {
+            display:inline-flex; flex-direction:column; align-items:center; justify-content:center;
+            min-width:68px; min-height:42px; max-width:96px; padding:6px 6px; border-radius:11px;
+            background:linear-gradient(145deg,#DDEAF2,#302018); border:1px solid #A7B9C4;
+            box-shadow:0 5px 0 #C5D4DC, 0 8px 14px rgba(0,0,0,.2); color:#40515C;
+            font-size:8px; font-weight:800; transition:.25s ease; position:relative;
+            transform:rotateX(5deg) rotateY(-3deg);
+        }
+        .tr-node small { color:#718590; font-size:6.5px; font-weight:600; margin-top:2px; }
+        .tr-node.visited { border-color:#789DB5; background:linear-gradient(145deg,#6B472F,#3B261B); transform:translateY(-4px) rotateX(5deg) rotateY(-3deg); box-shadow:0 5px 0 #6B3F12, 0 10px 18px rgba(245,158,11,.2); }
+        .tr-node.current { outline:2px solid #40515C; }
+        .tr-children { display:flex; gap:6px; padding-top:18px; position:relative; }
+        .tr-children::before { content:""; position:absolute; top:8px; left:7%; right:7%; height:1px; background:#A7B9C4; }
+        .tr-children > .tr-branch::before { content:""; position:absolute; top:8px; width:1px; height:10px; background:#A7B9C4; }
+        .tr-connector { width:1px; height:15px; background:#A7B9C4; }
+        .tr-seq { min-height:30px; background:#F5F7F8; border:1px solid #DDEAF2; border-radius:10px; padding:7px 9px; font-family:'JetBrains Mono',monospace; font-size:9px; color:#D7CCC8; }
+        .tr-seq strong { color:#789DB5; }
+        .tr-help { font-size:9px; line-height:1.35; color:#C7B8B2; }
+        @media (max-width: 760px) {
+            .growth-process .growth-arrow { display:none; }
+            .growth-process { display:grid !important; grid-template-columns:repeat(2,minmax(0,1fr)); }
+            .growth-stage { min-width:0; }
+        }
+    
+
+        /* Global minimalist white + powder-blue UI palette */
+        body { background-color:#F5F7F8 !important; background-image:radial-gradient(#DCE8EF 1px,transparent 1px) !important; color:#344A57 !important; }
+        .wood-panel { background:linear-gradient(145deg,#FFFFFF,#F1F5F7) !important; border-color:#A7B9C4 !important; box-shadow:0 8px 20px rgba(64,81,92,.12),inset 0 1px 1px rgba(255,255,255,.9) !important; }
+        .soil-panel { background:#F7F9FA !important; border-color:#A7B9C4 !important; box-shadow:inset 0 4px 12px rgba(64,81,92,.08) !important; }
+        .sky-panel { background:linear-gradient(180deg,#DDEAF2 0%,#FFFFFF 100%) !important; border-color:#8EADC0 !important; }
+        .rain-panel { background:linear-gradient(180deg,#DCE8EF 0%,#AFC9D8 100%) !important; border-color:#789DB5 !important; }
+        .elnino-panel { background:linear-gradient(180deg,#E8DFD1 0%,#F7F4EE 100%) !important; border-color:#B5A28B !important; }
+        .text-amber-100,.text-amber-200,.text-amber-300,.text-amber-400,.text-amber-500,.text-amber-600,.text-amber-700,.text-amber-800,.text-amber-900 { color:#40515C !important; }
+        .text-green-300,.text-green-400,.text-green-500,.text-green-600,.text-green-700,.text-green-800 { color:#607D94 !important; }
+        .text-red-300,.text-red-400,.text-red-500,.text-red-600,.text-red-700 { color:#789DB5 !important; }
+        .border-\[\#5D4037\],.border-\[\#6D4C41\],.border-\[\#4A3228\] { border-color:#A7B9C4 !important; }
+        .bg-\[\#1A100C\],.bg-\[\#231612\],.bg-\[\#2D1E18\],.bg-\[\#36241C\],.bg-\[\#4A3228\] { background-color:#F7F9FA !important; }
+        .seed-tree-root { background:linear-gradient(145deg,#BDD5E3,#8EADC0) !important; border-color:#789DB5 !important; color:#344A57 !important; box-shadow:0 5px 0 #607D94,0 9px 15px rgba(64,81,92,.16),inset 0 1px 1px rgba(255,255,255,.8) !important; }
+        .seed-tree-category-node,.seed-tree-leaf { background:linear-gradient(145deg,#DDEAF2,#F7F9FA) !important; border-color:#A7B9C4 !important; color:#40515C !important; box-shadow:0 4px 0 #C5D4DC,0 8px 12px rgba(64,81,92,.12),inset 0 1px 1px rgba(255,255,255,.8) !important; }
+        .seed-tree-3d { background:linear-gradient(180deg,#FFFFFF 0%,#F1F5F7 100%) !important; border-color:#A7B9C4 !important; }
+        .seed-tree-trunk,.seed-tree-category::before,.seed-tree-category-stem,.seed-tree-seeds::before,.seed-tree-leaf::before,.seed-tree-trunk::after,.seed-tree-category-stem::after,.tr-children::before,.tr-children > .tr-branch::before,.tr-connector { background:#A7B9C4 !important; }
+        .growth-process { background:#F5F5F1 !important; }
+        .growth-node { background:#DDEAF2 !important; border-color:#A7B9C4 !important; color:#40515C !important; box-shadow:0 4px 0 #C5D4DC,0 7px 12px rgba(50,70,80,.12),inset 0 1px rgba(255,255,255,.7) !important; }
+        .growth-node.active { background:#B8D0DF !important; border-color:#8EADC0 !important; box-shadow:0 4px 0 #8EAAB9,0 9px 16px rgba(80,110,125,.18),inset 0 1px rgba(255,255,255,.8) !important; }
+        .tr-node { background:linear-gradient(145deg,#DDEAF2,#F7F9FA) !important; border-color:#A7B9C4 !important; color:#40515C !important; box-shadow:0 5px 0 #C5D4DC,0 8px 14px rgba(64,81,92,.12) !important; }
+        .tr-node.visited { background:linear-gradient(145deg,#BDD5E3,#DDEAF2) !important; border-color:#789DB5 !important; box-shadow:0 5px 0 #607D94,0 10px 18px rgba(80,110,125,.16) !important; }
+        .tr-seq { background:#F7F9FA !important; border-color:#A7B9C4 !important; color:#40515C !important; }
+        .tr-seq strong { color:#607D94 !important; }
+        .tr-help { color:#718590 !important; }
+        header { border-color:#A7B9C4 !important; }
+        button { color:#40515C; }
+        input,textarea,select { background:#FFFFFF !important; color:#344A57 !important; border-color:#A7B9C4 !important; }
+        ::placeholder { color:#8E9BA3 !important; }
+    
+/* =========================================================
+   GARDEN UI THEME — DEEP GREEN + EARTH BROWN + POPPING BLUE
+   ========================================================= */
+
+body {
+    background-color: #10261B !important;
+    background-image:
+        radial-gradient(#244C35 1px, transparent 1px) !important;
+    color: #E8F1E8 !important;
+}
+
+/* Main wooden/card panels */
+.wood-panel {
+    background: linear-gradient(145deg, #234B34, #173625) !important;
+    border-color: #3E6B4A !important;
+    box-shadow:
+        0 8px 20px rgba(0,0,0,.38),
+        inset 0 1px 1px rgba(255,255,255,.08) !important;
+}
+
+.soil-panel {
+    background: linear-gradient(145deg, #3A2418, #26170F) !important;
+    border-color: #69432B !important;
+    box-shadow: inset 0 4px 12px rgba(0,0,0,.55) !important;
+}
+
+/* Strong blue sky/weather */
+.sky-panel {
+    background: linear-gradient(180deg, #159BD7 0%, #086FA8 100%) !important;
+    border-color: #38BDF8 !important;
+    color: #F0FAFF !important;
+}
+
+.rain-panel {
+    background: linear-gradient(180deg, #155E8A 0%, #0B3550 100%) !important;
+    border-color: #38BDF8 !important;
+}
+
+.elnino-panel {
+    background: linear-gradient(180deg, #7A421F 0%, #4A2816 100%) !important;
+    border-color: #A96532 !important;
+}
+
+/* Header */
+header {
+    border-color: #3E6B4A !important;
+}
+
+header h1 {
+    color: #DFF6E3 !important;
+}
+
+header p {
+    color: #8ED1FF !important;
+}
+
+/* General text */
+.text-amber-100,
+.text-amber-200 {
+    color: #DDF5E2 !important;
+}
+
+.text-amber-300,
+.text-amber-300\/80,
+.text-amber-300\/70,
+.text-amber-300\/60 {
+    color: #8ED1FF !important;
+}
+
+.text-amber-400,
+.text-amber-400\/80,
+.text-amber-400\/60 {
+    color: #38BDF8 !important;
+}
+
+.text-yellow-300 {
+    color: #7DD3FC !important;
+}
+
+.text-lime-400 {
+    color: #86EFAC !important;
+}
+
+/* Borders used throughout */
+.border-\[\#5D4037\] {
+    border-color: #3E6B4A !important;
+}
+
+.border-\[\#6D4C41\] {
+    border-color: #69432B !important;
+}
+
+.border-\[\#4A3228\] {
+    border-color: #69432B !important;
+}
+
+/* Buttons */
+.bg-\[\#231612\] {
+    background-color: #2A1A11 !important;
+}
+
+.bg-\[\#36241C\] {
+    background-color: #402619 !important;
+}
+
+.bg-\[\#4A3228\] {
+    background-color: #315B40 !important;
+}
+
+.bg-amber-700 {
+    background-color: #287A50 !important;
+}
+
+.hover\:bg-amber-600:hover,
+.hover\:bg-amber-800:hover,
+.hover\:bg-\[\#36241C\]:hover {
+    background-color: #3296D0 !important;
+}
+
+.border-amber-500 {
+    border-color: #38BDF8 !important;
+}
+
+.border-amber-900 {
+    border-color: #69432B !important;
+}
+
+/* Code/editor areas */
+.code-font {
+    color: #DDF5E2;
+}
+
+.bg-\[\#1A100C\] {
+    background-color: #1A2E21 !important;
+}
+
+.bg-\[\#0A0503\] {
+    background-color: #122017 !important;
+}
+
+.text-gray-900 {
+    color: #16231B !important;
+}
+
+/* Progress bars */
+.bg-gradient-to-r.from-emerald-600.to-lime-400 {
+    background: linear-gradient(90deg, #16834A, #69C96F) !important;
+}
+
+/* Planting & Growth Process */
+.growth-process {
+    background: #1A3022 !important;
+}
+
+.growth-node {
+    background: linear-gradient(145deg, #2E6545, #1E4931) !important;
+    border-color: #4D8A61 !important;
+    color: #E5F7E8 !important;
+    box-shadow:
+        0 4px 0 #173522,
+        0 7px 12px rgba(0,0,0,.3),
+        inset 0 1px rgba(255,255,255,.12) !important;
+}
+
+.growth-node.active {
+    background: linear-gradient(145deg, #159BD7, #086FA8) !important;
+    border-color: #5AC8F7 !important;
+    box-shadow:
+        0 4px 0 #064D73,
+        0 9px 16px rgba(21,155,215,.3),
+        inset 0 1px rgba(255,255,255,.2) !important;
+}
+
+.growth-label {
+    color: #E5F7E8 !important;
+}
+
+.growth-step {
+    color: #8ED1FF !important;
+}
+
+.growth-connector-v,
+.growth-child::before,
+.growth-children-connector::before {
+    background: #5B8D67 !important;
+}
+
+/* Tree Traversal visual */
+.seed-tree-3d {
+    background:
+        radial-gradient(circle at 50% 20%, rgba(49,139,91,.25), transparent 42%),
+        linear-gradient(180deg, #12291C 0%, #193D29 58%, #0E2117 100%) !important;
+    border-color: #3E6B4A !important;
+}
+
+.seed-tree-root {
+    background: linear-gradient(145deg, #159BD7 0%, #086FA8 72%, #064D73 100%) !important;
+    border-color: #5AC8F7 !important;
+}
+
+.seed-tree-root::after {
+    background: #064D73 !important;
+}
+
+.seed-tree-level {
+    color: #C8EEFF !important;
+}
+
+.seed-tree-trunk,
+.seed-tree-category::before {
+    background: #79502F !important;
+}
+
+.seed-tree-category-node {
+    color: #EFFAF1 !important;
+}
+
+/* Flower / vegetable / fruit nodes */
+.flowers .seed-tree-category-node {
+    background: linear-gradient(145deg, #397A52, #245A3A) !important;
+    border-color: #65A879 !important;
+}
+
+.vegetables .seed-tree-category-node {
+    background: linear-gradient(145deg, #2F8A55, #1D613B) !important;
+    border-color: #65B77D !important;
+}
+
+.fruits .seed-tree-category-node {
+    background: linear-gradient(145deg, #326F4A, #204D34) !important;
+    border-color: #5E9D70 !important;
+}
+
+/* Tree traversal sequence/result */
+.tr-seq {
+    background: #142A1D !important;
+    border-color: #3E6B4A !important;
+    color: #D8EBDD !important;
+}
+
+.tr-seq strong {
+    color: #38BDF8 !important;
+}
+
+.tr-help {
+    color: #A9D6B5 !important;
+}
+
+/* Traversal buttons */
+.traversal-btn {
+    background: #2A1A11 !important;
+    border-color: #69432B !important;
+    color: #DDF5E2 !important;
+}
+
+.traversal-btn:hover {
+    background: #287A50 !important;
+    border-color: #38BDF8 !important;
+    color: #FFFFFF !important;
+}
+
+/* Inputs / selects */
+select,
+input,
+textarea {
+    background-color: #1A2E21 !important;
+    color: #E8F1E8 !important;
+    border-color: #4D7D59 !important;
+}
+
+select:focus,
+input:focus,
+textarea:focus {
+    border-color: #38BDF8 !important;
+    box-shadow: 0 0 0 2px rgba(56,189,248,.18) !important;
+}
+
+/* Locked/unlocked still work normally */
+.locked {
+    opacity: .3;
+}
+
+
+        /* =========================================================
+           DEEP SPACE COLOR THEME
+           Palette: #112C70 #5B58EB #BB63FF #56E1E9 #0A2353
+           ========================================================= */
+        body {
+            background-color: #0A2353 !important;
+            background-image:
+                radial-gradient(circle at 20% 10%, rgba(91,88,235,.18), transparent 28%),
+                radial-gradient(circle at 80% 80%, rgba(86,225,233,.10), transparent 30%),
+                radial-gradient(#112C70 1px, transparent 1px) !important;
+            background-size: auto, auto, 20px 20px !important;
+            color: #EAFBFF !important;
+        }
+
+        header { border-color: #5B58EB !important; }
+        header h1 { color: #EAFBFF !important; }
+        header p { color: #56E1E9 !important; }
+
+        .wood-panel {
+            background: linear-gradient(145deg, #112C70, #0A2353) !important;
+            border-color: #5B58EB !important;
+            box-shadow: 0 8px 22px rgba(0,0,0,.35), inset 0 1px 1px rgba(255,255,255,.08) !important;
+        }
+
+        .soil-panel {
+            background: linear-gradient(145deg, #0A2353, #061633) !important;
+            border-color: #112C70 !important;
+            box-shadow: inset 0 4px 12px rgba(0,0,0,.45) !important;
+        }
+
+        .sky-panel {
+            background: linear-gradient(135deg, #112C70 0%, #5B58EB 52%, #56E1E9 100%) !important;
+            border-color: #56E1E9 !important;
+            color: #F2FFFF !important;
+        }
+
+        .rain-panel {
+            background: linear-gradient(135deg, #112C70 0%, #0A2353 60%, #5B58EB 100%) !important;
+            border-color: #56E1E9 !important;
+        }
+
+        .elnino-panel {
+            background: linear-gradient(135deg, #5B58EB 0%, #BB63FF 100%) !important;
+            border-color: #BB63FF !important;
+        }
+
+        /* Tailwind text colors — unify the interface */
+        .text-amber-100, .text-amber-200, .text-amber-300,
+        .text-amber-300\/80, .text-amber-400, .text-amber-400\/80,
+        .text-yellow-300, .text-yellow-400,
+        .text-lime-400, .text-emerald-200, .text-emerald-300,
+        .text-cyan-200, .text-cyan-300 {
+            color: #56E1E9 !important;
+        }
+
+        .text-sky-950, .text-sky-900, .text-sky-800 {
+            color: #EAFBFF !important;
+        }
+
+        .text-gray-800, .text-gray-900 { color: #EAFBFF !important; }
+
+        /* Borders */
+        [class*="border-[#5D4037]"],
+        [class*="border-[#4A3228]"],
+        [class*="border-[#6D4C41]"] {
+            border-color: #112C70 !important;
+        }
+
+        /* Resource bars */
+        [class*="bg-[#1A100C]"] {
+            background: #061633 !important;
+            border-color: #112C70 !important;
+        }
+
+        .bg-gradient-to-r.from-cyan-600,
+        [class*="from-cyan-600"] {
+            background-image: linear-gradient(90deg, #5B58EB, #56E1E9) !important;
+        }
+        [class*="from-emerald-600"],
+        [class*="from-amber-600"],
+        [class*="from-rose-600"] {
+            background-image: linear-gradient(90deg, #112C70, #BB63FF) !important;
+        }
+
+        /* Tabs and buttons */
+        [class*="bg-[#231612]"] {
+            background: #061633 !important;
+            border-color: #112C70 !important;
+        }
+
+        [class*="bg-[#4A3228]"] {
+            background: #5B58EB !important;
+        }
+
+        [class*="bg-amber-700"],
+        [class*="bg-emerald-800"],
+        [class*="bg-cyan-900"] {
+            background: #5B58EB !important;
+            border-color: #56E1E9 !important;
+            color: #F2FFFF !important;
+        }
+
+        [class*="hover:bg-amber-"],
+        [class*="hover:bg-emerald-"],
+        [class*="hover:bg-cyan-"] {
+            background: #BB63FF !important;
+        }
+
+        button, .traversal-btn {
+            transition: .2s ease !important;
+        }
+
+        button:hover, .traversal-btn:hover {
+            box-shadow: 0 0 12px rgba(86,225,233,.22) !important;
+        }
+
+        input, select, textarea {
+            background: #061633 !important;
+            color: #EAFBFF !important;
+            border-color: #5B58EB !important;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            border-color: #56E1E9 !important;
+            box-shadow: 0 0 0 2px rgba(86,225,233,.18) !important;
+        }
+
+        /* Traversal tree */
+        .traversal-panel { border-color: #5B58EB !important; }
+        .traversal-tree {
+            background: linear-gradient(180deg, #0A2353, #061633) !important;
+            border-color: #112C70 !important;
+        }
+        .tr-node {
+            background: linear-gradient(145deg, #112C70, #0A2353) !important;
+            border-color: #5B58EB !important;
+            color: #EAFBFF !important;
+            box-shadow: 0 4px 0 #061633, 0 8px 14px rgba(0,0,0,.25) !important;
+        }
+        .tr-node small { color: #56E1E9 !important; }
+        .tr-node.visited {
+            background: linear-gradient(145deg, #5B58EB, #BB63FF) !important;
+            border-color: #56E1E9 !important;
+            box-shadow: 0 5px 0 #112C70, 0 10px 18px rgba(91,88,235,.3) !important;
+        }
+        .tr-node.current { outline-color: #56E1E9 !important; }
+        .tr-children::before,
+        .tr-children > .tr-branch::before,
+        .tr-connector { background: #56E1E9 !important; }
+        .tr-seq {
+            background: #061633 !important;
+            border-color: #112C70 !important;
+            color: #DDFBFF !important;
+        }
+        .tr-seq strong { color: #56E1E9 !important; }
+        .tr-help { color: #A8DCE5 !important; }
+
+        /* Planting & Growth Process */
+        .growth-process {
+            background: #061633 !important;
+        }
+        .growth-node {
+            background: linear-gradient(145deg, #112C70, #0A2353) !important;
+            border-color: #5B58EB !important;
+            color: #EAFBFF !important;
+            box-shadow: 0 4px 0 #061633, 0 7px 12px rgba(0,0,0,.25), inset 0 1px rgba(255,255,255,.08) !important;
+        }
+        .growth-node.active {
+            background: linear-gradient(145deg, #5B58EB, #BB63FF) !important;
+            border-color: #56E1E9 !important;
+            box-shadow: 0 4px 0 #112C70, 0 9px 16px rgba(86,225,233,.22), inset 0 1px rgba(255,255,255,.15) !important;
+        }
+        .growth-label { color: #EAFBFF !important; }
+        .growth-step { color: #56E1E9 !important; }
+        .growth-connector-v,
+        .growth-children-connector::before,
+        .growth-child::before { background: #56E1E9 !important; }
+
+        /* Code editor */
+        .code-editor, pre, code {
+            border-color: #112C70 !important;
+        }
+
+        /* Keep the garden itself colorful, but make its surrounding UI match */
+        .garden-tile {
+            border-color: #5B58EB !important;
+        }
+
+        /* Scrollbars */
+        ::-webkit-scrollbar { width: 9px; height: 9px; }
+        ::-webkit-scrollbar-track { background: #061633; }
+        ::-webkit-scrollbar-thumb { background: #5B58EB; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #56E1E9; }
+
+
+        /* =========================================================
+           PASTEL BOTANICAL THEME
+           Sorbet Stem + Petal Glaze + Dusty Orchid + Powdered Lilac Grey
+           ========================================================= */
+        :root {
+            --botanical-green: #C2DC80;
+            --botanical-pink: #EA9CAF;
+            --botanical-rose: #D56989;
+            --botanical-lilac: #F3EEF1;
+            --botanical-deep: #5B3545;
+            --botanical-dark: #3F2934;
+            --botanical-green-deep: #7E9B4F;
+            --botanical-pink-soft: #F2C3CE;
+            --botanical-shadow: rgba(84, 48, 61, .22);
+        }
+
+        body {
+            background-color: var(--botanical-lilac) !important;
+            background-image:
+                radial-gradient(rgba(213,105,137,.20) 1px, transparent 1px) !important;
+            background-size: 20px 20px !important;
+            color: var(--botanical-deep) !important;
+        }
+
+        .wood-panel {
+            background: linear-gradient(145deg, #EA9CAF 0%, #D56989 100%) !important;
+            border: 2px solid #B85B77 !important;
+            box-shadow: 0 8px 20px var(--botanical-shadow), inset 0 1px 1px rgba(255,255,255,.28) !important;
+        }
+
+        .soil-panel {
+            background: linear-gradient(145deg, #C2DC80 0%, #AFCB70 100%) !important;
+            border: 2px solid #8FA95A !important;
+            box-shadow: inset 0 3px 10px rgba(78,91,44,.20) !important;
+        }
+
+        .sky-panel {
+            background: linear-gradient(180deg, #C2DC80 0%, #EA9CAF 100%) !important;
+            border: 2px solid #D56989 !important;
+        }
+
+        .rain-panel {
+            background: linear-gradient(180deg, #D56989 0%, #A94F6D 100%) !important;
+            border: 2px solid #8E405B !important;
+        }
+
+        .elnino-panel {
+            background: linear-gradient(180deg, #C2DC80 0%, #E5C96F 100%) !important;
+            border: 2px solid #9CAF58 !important;
+        }
+
+        /* Tailwind color utilities used throughout the existing UI */
+        [class*="text-amber-"] { color: #5B3545 !important; }
+        [class*="text-cyan-"] { color: #4B6670 !important; }
+        [class*="text-emerald-"] { color: #49633A !important; }
+        [class*="text-lime-"] { color: #60783B !important; }
+        [class*="text-yellow-"] { color: #806B38 !important; }
+        [class*="text-rose-"] { color: #8D435C !important; }
+        [class*="text-sky-"] { color: #4A6370 !important; }
+        [class*="text-gray-"] { color: #5B4B54 !important; }
+        [class~="text-white"] { color: #FFF9FB !important; }
+
+        [class*="border-amber-"] { border-color: #B85B77 !important; }
+        [class*="border-cyan-"] { border-color: #8FA95A !important; }
+        [class*="border-emerald-"] { border-color: #7E9B4F !important; }
+        [class*="border-red-"] { border-color: #B85B77 !important; }
+        [class*="border-sky-"] { border-color: #9AAFC0 !important; }
+        [class*="border-[#5D4037]"] { border-color: #B85B77 !important; }
+        [class*="border-[#4A3228]"] { border-color: #B85B77 !important; }
+        [class*="border-[#6D4C41]"] { border-color: #B85B77 !important; }
+
+        [class*="bg-amber-"] { background-color: #D56989 !important; }
+        [class*="bg-emerald-"] { background-color: #7E9B4F !important; }
+        [class*="bg-cyan-"] { background-color: #8FCFD0 !important; }
+        [class*="bg-red-"] { background-color: #C76A82 !important; }
+        [class*="bg-white/"] { background-color: rgba(243,238,241,.88) !important; }
+        [class*="bg-[#0A0503]"] { background-color: #5B3545 !important; }
+        [class*="bg-[#120A07]"] { background-color: #6E3F50 !important; }
+        [class*="bg-[#1A100C]"] { background-color: #7A4659 !important; }
+        [class*="bg-[#231612]"] { background-color: #B7CC7A !important; }
+        [class*="bg-[#4A3228]"] { background-color: #B85B77 !important; }
+
+        /* Buttons */
+        button,
+        .traversal-btn {
+            background: #D56989 !important;
+            color: #FFF9FB !important;
+            border-color: #B85B77 !important;
+            box-shadow: 0 3px 0 #A14D68, 0 5px 10px rgba(84,48,61,.16) !important;
+        }
+        button:hover,
+        .traversal-btn:hover {
+            background: #C75D7D !important;
+        }
+
+        /* Main traversal area */
+        .traversal-panel {
+            background: linear-gradient(145deg, #F3EEF1, #EA9CAF) !important;
+            border-color: #B85B77 !important;
+            box-shadow: 0 8px 20px var(--botanical-shadow) !important;
+        }
+
+        .traversal-tree {
+            background: linear-gradient(180deg, #F2C3CE 0%, #EA9CAF 100%) !important;
+            border-color: #D56989 !important;
+        }
+
+        .tr-node {
+            background: linear-gradient(145deg, #D56989, #B95774) !important;
+            border-color: #EA9CAF !important;
+            color: #FFF9FB !important;
+            box-shadow: 0 4px 0 #9E4964, 0 8px 14px rgba(84,48,61,.18) !important;
+        }
+        .tr-node small { color: #FBE4EA !important; }
+        .tr-node.visited {
+            background: linear-gradient(145deg, #C2DC80, #91AE56) !important;
+            border-color: #7E9B4F !important;
+            color: #3F4E2C !important;
+            box-shadow: 0 5px 0 #708C43, 0 10px 18px rgba(93,115,48,.20) !important;
+        }
+        .tr-node.current { outline: 2px solid #C2DC80 !important; }
+        .tr-children::before,
+        .tr-children > .tr-branch::before,
+        .tr-connector { background: #B85B77 !important; }
+        .tr-seq {
+            background: #F3EEF1 !important;
+            border-color: #D56989 !important;
+            color: #5B3545 !important;
+        }
+        .tr-seq strong { color: #A94F6D !important; }
+        .tr-help { color: #6E5660 !important; }
+
+        /* Planting & Growth Process */
+        .growth-process {
+            background: #F2C3CE !important;
+            border-radius: 12px;
+        }
+        .growth-node {
+            background: linear-gradient(145deg, #D56989, #B95774) !important;
+            border-color: #EA9CAF !important;
+            box-shadow: 0 4px 0 #9E4964, 0 7px 12px rgba(84,48,61,.16), inset 0 1px rgba(255,255,255,.28) !important;
+            color: #FFF9FB !important;
+        }
+        .growth-node.active {
+            background: linear-gradient(145deg, #C2DC80, #91AE56) !important;
+            border-color: #7E9B4F !important;
+            box-shadow: 0 4px 0 #708C43, 0 9px 16px rgba(93,115,48,.20), inset 0 1px rgba(255,255,255,.35) !important;
+        }
+        .growth-label { color: #FFF9FB !important; }
+        .growth-step { color: #FBE4EA !important; }
+        .growth-connector-v,
+        .growth-children-connector::before,
+        .growth-child::before { background: #B85B77 !important; }
+
+        /* 3D Seed Hierarchy */
+        .seed-tree-3d {
+            background:
+                radial-gradient(circle at 50% 20%, rgba(194,220,128,.28), transparent 42%),
+                linear-gradient(180deg, #F2C3CE 0%, #EA9CAF 58%, #D98AA2 100%) !important;
+            border-color: #B85B77 !important;
+        }
+        .seed-tree-root {
+            background: linear-gradient(145deg, #C2DC80 0%, #91AE56 100%) !important;
+            border-color: #7E9B4F !important;
+            color: #3F4E2C !important;
+            box-shadow: 0 5px 0 #708C43, 0 9px 15px rgba(93,115,48,.20), inset 0 1px 1px rgba(255,255,255,.35) !important;
+        }
+        .seed-tree-root::after { background: #708C43 !important; }
+        .seed-tree-level { color: #526438 !important; }
+        .seed-tree-trunk { background: linear-gradient(#7E9B4F, #5F783D) !important; }
+        .seed-tree-trunk::after { background: #A95B6E !important; }
+        .seed-tree-3d .tree-line { background: linear-gradient(90deg, rgba(126,155,79,.45), #7E9B4F, rgba(126,155,79,.45)) !important; }
+        .seed-tree-3d .tree-caption { color: #6E5660 !important; }
+
+        /* Code editor / code blocks */
+        pre, code,
+        .code-editor,
+        textarea {
+            background-color: #3F2934 !important;
+            color: #FBE4EA !important;
+            border-color: #B85B77 !important;
+        }
+        textarea:focus, input:focus, select:focus {
+            outline-color: #D56989 !important;
+            border-color: #D56989 !important;
+            box-shadow: 0 0 0 2px rgba(213,105,137,.20) !important;
+        }
+        input, select {
+            background: #F3EEF1 !important;
+            color: #5B3545 !important;
+            border-color: #C98AA0 !important;
+        }
+
+        /* Headings and separators */
+        header { border-color: #B85B77 !important; }
+        h1, h2, h3, h4 { color: #5B3545 !important; }
+        hr { border-color: #D56989 !important; }
+
+        .locked { opacity: .38; filter: grayscale(35%) blur(.5px); }
+
+        @media (max-width: 760px) {
+            body { background-image: none !important; }
+        }
+
+    
+
+/* =========================================================
+   TEXT COLOR FIX — DARK PLUM THROUGHOUT THE UI
+   ========================================================= */
+body {
+    color: #5A3445 !important;
+}
+
+h1, h2, h3, h4, h5, h6, p, span, label, small, strong, em,
+button, input, textarea, select, option, li, td, th, a {
+    color: #5A3445 !important;
+}
+
+/* Override Tailwind text-color utilities so no section keeps green text */
+[class*="text-green-"],
+[class*="text-lime-"],
+[class*="text-emerald-"],
+[class*="text-amber-"],
+[class*="text-yellow-"],
+[class*="text-blue-"],
+[class*="text-cyan-"],
+[class*="text-sky-"],
+[class*="text-red-"],
+[class*="text-purple-"],
+[class*="text-pink-"],
+[class*="text-indigo-"] {
+    color: #5A3445 !important;
+}
+
+/* Component-specific text */
+.growth-label,
+.growth-step,
+.tr-node,
+.tr-node small,
+.tr-seq,
+.tr-seq strong,
+.tr-help,
+.seed-tree-root,
+.seed-tree-category-node,
+.seed-tree-leaf {
+    color: #5A3445 !important;
+}
+
+input::placeholder,
+textarea::placeholder,
+::placeholder {
+    color: #8B6172 !important;
+}
+</style>
+</head>
+<body class="min-h-screen p-4 flex flex-col justify-between overflow-x-hidden">
+
+    <!-- HEADER & WEATHER BANNER -->
+    <header class="w-full max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4 pb-2 border-b border-[#5D4037]">
+        <div>
+            <div class="flex items-center gap-2">
+                <span class="text-3xl">🌱</span>
+                <h1 class="text-2xl font-extrabold tracking-tight text-amber-100">Python Garden Simulator</h1>
+            </div>
+            <p class="text-xs text-amber-300/80 font-medium">SDG 2, 13, 15 — DSA Learning Lab</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <div class="wood-panel px-4 py-2 rounded-xl flex flex-col items-end">
+                <span class="text-[10px] text-amber-400 uppercase tracking-widest font-bold">ACTIVE ZOMBIES</span>
+                <span class="text-lg font-extrabold text-red-400" id="zombie-counter">0 / 3</span>
+            </div>
+            <div class="wood-panel px-4 py-2 rounded-xl flex flex-col items-end">
+                <span class="text-[10px] text-amber-400 uppercase tracking-widest font-bold">🌵 CACTUS AMMO</span>
+                <span class="text-lg font-extrabold text-lime-400" id="cactus-counter">100 / 100</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="w-full max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-4 flex-grow">
+        
+        <!-- LEFT: RESOURCE SHED -->
+        <section id="resources-section" class="lg:col-span-3 wood-panel rounded-2xl p-4 locked flex flex-col justify-between">
+            <div>
+                <h2 class="text-base font-bold text-amber-200 border-b border-[#5D4037] pb-2 mb-4 flex items-center gap-2">
+                    <i data-lucide="box" class="w-4 h-4 text-amber-400"></i> Resource Storage
+                </h2>
+                <div class="space-y-4">
+                    <!-- WATER BAR & REFILL BUCKET BUTTON -->
+                    <div>
+                        <div class="flex justify-between text-xs font-semibold mb-1">
+                            <span class="flex items-center gap-1 text-cyan-300">🪣 Water Reserves</span>
+                            <span id="water-text" class="text-cyan-200">500 / 500 L</span>
+                        </div>
+                        <div class="w-full bg-[#1A100C] h-3 rounded-full overflow-hidden p-0.5 border border-[#4A3228]">
+                            <div id="water-bar" class="bg-gradient-to-r from-cyan-600 to-cyan-400 h-full rounded-full" style="width: 100%"></div>
+                        </div>
+                        <button onclick="buyWaterRefill()" class="mt-2 w-full bg-cyan-900/80 hover:bg-cyan-800 border border-cyan-500/50 text-cyan-100 text-[11px] font-bold py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-all shadow-sm">
+                            <span>🪣 Buy Water (+100L)</span>
+                            <span class="text-yellow-300 font-extrabold">-15c</span>
+                        </button>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between text-xs font-semibold mb-1">
+                            <span class="flex items-center gap-1 text-emerald-300">🎒 Seed Bag Space</span>
+                            <span id="seeds-text" class="text-emerald-200">90 / 100</span>
+                        </div>
+                        <div class="w-full bg-[#1A100C] h-3 rounded-full overflow-hidden p-0.5 border border-[#4A3228]">
+                            <div id="seeds-bar" class="bg-gradient-to-r from-emerald-600 to-lime-400 h-full rounded-full" style="width: 90%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-xs font-semibold mb-1">
+                            <span class="flex items-center gap-1 text-amber-300">☀️ Solar Energy</span>
+                            <span id="energy-text" class="text-amber-200">100 / 100 Wh</span>
+                        </div>
+                        <div class="w-full bg-[#1A100C] h-3 rounded-full overflow-hidden p-0.5 border border-[#4A3228]">
+                            <div id="energy-bar" class="bg-gradient-to-r from-amber-600 to-yellow-400 h-full rounded-full" style="width: 100%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-xs font-semibold mb-1">
+                            <span class="flex items-center gap-1 text-rose-300">❤️ Hope</span>
+                            <span id="hope-text" class="text-rose-200">100 / 100</span>
+                        </div>
+                        <div class="w-full bg-[#1A100C] h-3 rounded-full overflow-hidden p-0.5 border border-[#4A3228]">
+                            <div id="hope-bar" class="bg-gradient-to-r from-rose-600 to-pink-400 h-full rounded-full" style="width: 100%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6 pt-3 border-t border-[#5D4037] flex items-center justify-between">
+                <span class="text-xs font-bold text-amber-300 flex items-center gap-1">🪙 Purse Balance:</span>
+                <span id="coins-text" class="text-base font-extrabold text-yellow-300">200 Coins</span>
+            </div>
+        </section>
+
+        <!-- CENTER: GARDEN SANCTUARY / CODE LAB -->
+        <section class="lg:col-span-6 flex flex-col gap-4">
+            
+            <!-- Navigation Tabs -->
+            <div class="flex bg-[#231612] p-1.5 rounded-xl border border-[#5D4037] w-fit">
+                <button onclick="switchTab('game')" id="tab-game" class="px-4 py-1.5 rounded-lg text-xs font-bold bg-[#4A3228] text-amber-100">🌻 Garden Sanctuary</button>
+                <button onclick="switchTab('code')" id="tab-code" class="px-4 py-1.5 rounded-lg text-xs font-bold text-amber-400/80 hover:text-amber-100">💻 Python Code Editor</button>
+            </div>
+
+            <!-- TAB 1: INTERACTIVE GARDEN -->
+            <div id="view-game" class="wood-panel rounded-2xl p-5 min-h-[440px] locked flex flex-col justify-between">
+                
+                <!-- Weather Banner -->
+                <div id="weather-banner" class="sky-panel rounded-xl p-3 flex items-center justify-between text-gray-800 mb-4 shadow-md transition-all">
+                    <div class="flex items-center gap-3">
+                        <span id="weather-icon" class="text-3xl">☀️</span>
+                        <div>
+                            <div id="weather-title" class="font-bold text-sm text-sky-950">Fast-Paced Gardening!</div>
+                            <div id="weather-desc" class="text-[11px] text-sky-800 font-medium">Water in 5s or El Niño strikes! Harvest/shoot in 10s!</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-bold text-sky-900">Seed Bag:</span>
+                        <select id="crop-selector" class="bg-white/90 border border-sky-400 text-gray-900 text-xs rounded-lg px-2.5 py-1.5 font-semibold focus:outline-none shadow-sm">
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 5x5 Garden Grid -->
+                <div class="soil-panel p-4 rounded-xl flex-grow flex items-center justify-center">
+                    <div id="garden-grid" class="grid grid-cols-5 gap-2 w-full max-w-[420px]"></div>
+                </div>
+
+                <div class="mt-3 flex items-center justify-between text-xs text-amber-300/80 px-1">
+                    <span>⚡ Quick hands! 5s Water limit | 10s Harvest window | 10s Zombie Shoot window</span>
+                </div>
+            </div>
+
+            <!-- SEPARATE TREE TRAVERSAL: SEED HIERARCHY -->
+            <section id="tree-traversal-panel" class="wood-panel rounded-2xl p-5 traversal-panel">
+                <div class="flex flex-col gap-2 mb-3">
+                    <h2 class="font-bold text-amber-200 flex items-center gap-2">
+                        <i data-lucide="network" class="w-5 h-5 text-amber-400"></i> Tree Traversal — Seed Hierarchy
+                    </h2>
+                    <p class="tr-help">This tree represents the simulator's seed classification: <b>Seeds → Category → Individual Seed</b>. Select a traversal to see the visit order.</p>
+                </div>
+
+                <div class="flex flex-wrap gap-2 mb-3">
+                    <button type="button" onclick="setTraversal('bfs')" id="tr-btn-bfs" class="traversal-btn px-3 py-2 rounded-lg text-[10px] font-bold bg-amber-700 border border-amber-500 text-amber-100">BFS</button>
+                    <button type="button" onclick="setTraversal('preorder')" id="tr-btn-preorder" class="traversal-btn px-3 py-2 rounded-lg text-[10px] font-bold bg-[#231612] border border-[#5D4037] text-amber-200">DFS Preorder</button>
+                    <button type="button" onclick="setTraversal('inorder')" id="tr-btn-inorder" class="traversal-btn px-3 py-2 rounded-lg text-[10px] font-bold bg-[#231612] border border-[#5D4037] text-amber-200">DFS Inorder</button>
+                    <button type="button" onclick="setTraversal('postorder')" id="tr-btn-postorder" class="traversal-btn px-3 py-2 rounded-lg text-[10px] font-bold bg-[#231612] border border-[#5D4037] text-amber-200">DFS Postorder</button>
+                    <button type="button" onclick="traversalNext()" class="px-3 py-2 rounded-lg text-[10px] font-bold bg-emerald-800 border border-emerald-500 text-emerald-100">Next Node</button>
+                    <button type="button" onclick="toggleTraversalPlay()" id="tr-play-btn" class="px-3 py-2 rounded-lg text-[10px] font-bold bg-[#231612] border border-[#5D4037] text-amber-200">▶ Play</button>
+                    <button type="button" onclick="resetTraversal()" class="px-3 py-2 rounded-lg text-[10px] font-bold bg-[#231612] border border-[#5D4037] text-amber-200">↺ Reset</button>
+                </div>
+
+                <div class="soil-panel rounded-xl traversal-tree">
+                    <div class="tr-level">
+                        <div class="tr-branch">
+                            <div class="tr-node" data-tr-node="Seeds">📦 Seeds<small>Root</small></div>
+                            <div class="tr-connector"></div>
+                            <div class="tr-children">
+                                <div class="tr-branch">
+                                    <div class="tr-node" data-tr-node="Flowers">🌺 Flowers</div>
+                                    <div class="tr-connector"></div>
+                                    <div class="tr-children">
+                                        <div class="tr-branch"><div class="tr-node" data-tr-node="Tulip">🌷 Tulip</div></div>
+                                        <div class="tr-branch"><div class="tr-node" data-tr-node="Cherry Blossom">🌸 Cherry Blossom</div></div>
+                                        <div class="tr-branch"><div class="tr-node" data-tr-node="Sunflower">🌻 Sunflower</div></div>
+                                    </div>
+                                </div>
+                                <div class="tr-branch">
+                                    <div class="tr-node" data-tr-node="Vegetables">🥦 Vegetables</div>
+                                    <div class="tr-connector"></div>
+                                    <div class="tr-children">
+                                        <div class="tr-branch"><div class="tr-node" data-tr-node="Tomato">🍅 Tomato</div></div>
+                                        <div class="tr-branch"><div class="tr-node" data-tr-node="Onion">🧅 Onion</div></div>
+                                        <div class="tr-branch"><div class="tr-node" data-tr-node="Eggplant">🍆 Eggplant</div></div>
+                                    </div>
+                                </div>
+                                <div class="tr-branch">
+                                    <div class="tr-node" data-tr-node="Fruits">🍎 Fruits</div>
+                                    <div class="tr-connector"></div>
+                                    <div class="tr-children">
+                                        <div class="tr-branch"><div class="tr-node" data-tr-node="Strawberry">🍓 Strawberry</div></div>
+                                        <div class="tr-branch"><div class="tr-node" data-tr-node="Watermelon">🍉 Watermelon</div></div>
+                                        <div class="tr-branch"><div class="tr-node" data-tr-node="Mango">🥭 Mango</div></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div class="tr-seq" id="traversal-sequence"><strong>BFS:</strong> Seeds → Flowers → Vegetables → Fruits → ...</div>
+                    <div class="tr-seq" id="traversal-current"><strong>Current:</strong> Ready to traverse</div>
+                </div>
+                <div class="mt-2 text-[9px] text-amber-300/60">Inorder is shown as a generalized n-ary-tree inorder: first child → parent → remaining children.</div>
+            </section>
+
+            <!-- TAB 2: CODE EDITOR -->
+            <div id="view-code" class="wood-panel rounded-2xl p-5 flex flex-col flex-grow hidden">
+                <h2 class="font-bold mb-3 text-amber-200 flex items-center gap-2">
+                    <i data-lucide="code" class="w-5 h-5 text-amber-400"></i> Python Lab Code
+                </h2>
+                <select id="topic-selector" onchange="loadTopic()" class="w-full bg-[#1A100C] border border-[#6D4C41] rounded-xl p-3 mb-3 text-xs text-amber-100 font-semibold focus:outline-none"></select>
+                <textarea id="code-editor" class="flex-1 bg-[#120A07] border border-[#5D4037] rounded-xl p-4 code-font text-xs text-emerald-400 leading-relaxed min-h-[220px]" spellcheck="false"></textarea>
+                <button onclick="runPythonCode()" class="mt-3 bg-amber-700 hover:bg-amber-600 border border-amber-500 py-3 rounded-xl font-bold text-amber-100 flex items-center justify-center gap-2 transition-all shadow-md">
+                    <i data-lucide="play" class="w-4 h-4 fill-current"></i> Execute Python Code
+                </button>
+                <div id="output-console" class="mt-3 bg-[#0A0503] border border-[#4A3228] rounded-xl p-3 text-xs max-h-36 overflow-auto font-mono text-amber-200/90 whitespace-pre-wrap"></div>
+            </div>
+        </section>
+
+        <!-- RIGHT: TAXONOMY & HISTORY -->
+        <section class="lg:col-span-3 flex flex-col gap-4">
+            
+            <div id="taxonomy-tree-panel" class="wood-panel rounded-2xl p-4">
+                <h3 class="font-bold text-amber-300 text-xs mb-3 flex items-center gap-1.5 border-b border-[#5D4037] pb-2">
+                    <i data-lucide="git-fork" class="w-4 h-4 text-amber-400"></i> Planting &amp; Growth Process
+                </h3>
+                <div class="soil-panel rounded-xl p-2 overflow-hidden">
+                    <div id="growth-status" class="text-[9px] text-amber-300/80 font-semibold mb-1 text-center">Choose a seed to begin.</div>
+                    <div class="growth-process">
+                        <div class="growth-tree">
+                            <div class="growth-level single">
+                                <div class="growth-node active" data-growth="buy"><div class="growth-icon">🛒</div><div class="growth-label">Buy Seed</div><div class="growth-step">1</div></div>
+                            </div>
+                            <div class="growth-connector-v"></div>
+
+                            <div class="growth-level single">
+                                <div class="growth-node" data-growth="choose"><div class="growth-icon">🌱</div><div class="growth-label">Choose Seed</div><div class="growth-step">2</div></div>
+                            </div>
+                            <div class="growth-connector-v"></div>
+
+                            <div class="growth-children-connector two"></div>
+                            <div class="growth-level">
+                                <div class="growth-child"><div class="growth-node" data-growth="plant"><div class="growth-icon">🪴</div><div class="growth-label">Plant Seed</div><div class="growth-step">3</div></div></div>
+                                <div class="growth-child"><div class="growth-node" data-growth="water"><div class="growth-icon">💧</div><div class="growth-label">Water</div><div class="growth-step">4</div></div></div>
+                            </div>
+                            <div class="growth-connector-v"></div>
+
+                            <div class="growth-children-connector three"></div>
+                            <div class="growth-level">
+                                <div class="growth-child"><div class="growth-node" data-growth="seedling"><div class="growth-icon">🌿</div><div class="growth-label">Seedling</div><div class="growth-step">5</div></div></div>
+                                <div class="growth-child"><div class="growth-node" data-growth="growing"><div class="growth-icon">🌱</div><div class="growth-label">Growing</div><div class="growth-step">6</div></div></div>
+                                <div class="growth-child"><div class="growth-node" data-growth="mature"><div class="growth-icon">🌻</div><div class="growth-label">Mature Plant</div><div class="growth-step">7</div></div></div>
+                            </div>
+                            <div class="growth-connector-v"></div>
+
+                            <div class="growth-level single">
+                                <div class="growth-node" data-growth="harvest"><div class="growth-icon">🌾</div><div class="growth-label">Harvest</div><div class="growth-step">8</div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="climate-queue-panel" class="wood-panel rounded-2xl p-4 locked">
+                <h3 class="font-bold text-amber-400 text-xs mb-2 flex items-center gap-1.5">
+                    <i data-lucide="cloud-lightning" class="w-4 h-4"></i> Climate Queue (FIFO)
+                </h3>
+                <div id="climate-queue" class="space-y-2 text-xs"></div>
+            </div>
+
+            <div id="stack-panel" class="wood-panel rounded-2xl p-4 flex-1 flex flex-col locked">
+                <h3 class="font-bold text-amber-400 text-xs mb-2 flex items-center gap-1.5">
+                    <i data-lucide="history" class="w-4 h-4"></i> Action History (Stack)
+                </h3>
+                <div id="action-stack" class="flex-1 space-y-2 text-xs overflow-auto max-h-40"></div>
+                <button onclick="triggerUndo()" class="mt-3 w-full bg-[#231612] hover:bg-[#36241C] text-amber-200 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 border border-[#5D4037]">
+                    <i data-lucide="undo-2" class="w-3.5 h-3.5"></i> Undo Action
+                </button>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        let pyodideInstance = null;
+        let savedCode = JSON.parse(localStorage.getItem("savedDSACode")) || {};
+        let actionStack = [];
+        
+        // Game State Variables
+        let userCoins = 200;
+        let waterReserves = 500;
+        let maxWater = 500;
+        let solarEnergy = 100;
+        let maxEnergy = 100;
+        let hopeLevel = 100;
+        let maxHope = 100;
+        let cactusAmmo = 100;
+        let zombieCount = 0;
+        let gardenGridState = Array(25).fill(null);
+
+        const seedDatabase = {
+            "Tulip": { emoji: "🌷", cost: 20 },
+            "Cherry Blossom": { emoji: "🌸", cost: 35 },
+            "Sunflower": { emoji: "🌻", cost: 15 },
+            "Tomato": { emoji: "🍅", cost: 25 },
+            "Onion": { emoji: "🧅", cost: 15 },
+            "Eggplant": { emoji: "🍆", cost: 30 },
+            "Strawberry": { emoji: "🍓", cost: 30 },
+            "Watermelon": { emoji: "🍉", cost: 50 },
+            "Mango": { emoji: "🥭", cost: 45 }
+        };
+
+        async function initPyodide() {
+            if (!pyodideInstance) {
+                pyodideInstance = await loadPyodide();
+                pyodideInstance.globals.set("unlockFeature", unlockFeature);
+                pyodideInstance.globals.set("updateResources", updateResources);
+                pyodideInstance.globals.set("addPlantsToDropdown", addPlantsToDropdown);
+                pyodideInstance.globals.set("pushAction", pushAction);
+                pyodideInstance.globals.set("updateClimateQueue", updateClimateQueue);
+                await pyodideInstance.runPythonAsync(`
+                    import sys
+                    from js import document
+                    class Console:
+                        def write(self, text):
+                            if text and text.strip():
+                                el = document.getElementById("output-console")
+                                if el:
+                                    el.innerHTML += text.replace("\\n", "<br>")
+                        def flush(self): pass
+                    sys.stdout = Console()
+                `);
+            }
+        }
+
+        function unlockFeature(feature) {
+            if (feature === "resources") {
+                document.getElementById("resources-section").classList.remove("locked");
+                document.getElementById("resources-section").classList.add("unlocked");
+            }
+            if (feature === "stack") {
+                document.getElementById("stack-panel").classList.remove("locked");
+                document.getElementById("stack-panel").classList.add("unlocked");
+            }
+            if (feature === "queue") {
+                document.getElementById("climate-queue-panel").classList.remove("locked");
+                document.getElementById("climate-queue-panel").classList.add("unlocked");
+            }
+            if (feature === "grid") {
+                document.getElementById("view-game").classList.remove("locked");
+                document.getElementById("view-game").classList.add("unlocked");
+            }
+        }
+
+        function updateClimateQueue(events) {
+            const container = document.getElementById("climate-queue");
+            container.innerHTML = "";
+            events.forEach(event => {
+                const div = document.createElement("div");
+                div.className = "p-2 bg-[#1A100C] border border-amber-900 rounded-lg text-xs";
+                div.innerHTML = `<div class="font-bold text-amber-400">${event}</div>`;
+                container.appendChild(div);
+            });
+        }
+
+        function updateResources(water=waterReserves, seeds=90, energy=solarEnergy, hope=hopeLevel, coins=userCoins) {
+            if (typeof water === 'object' && water !== null) {
+                const args = water;
+                water = args.water !== undefined ? args.water : waterReserves;
+                coins = args.coins !== undefined ? args.coins : userCoins;
+                energy = args.energy !== undefined ? args.energy : solarEnergy;
+                hope = args.hope !== undefined ? args.hope : hopeLevel;
+            }
+            
+            waterReserves = water;
+            userCoins = coins;
+            solarEnergy = energy;
+            hopeLevel = hope;
+
+            document.getElementById("water-text").innerText = `${waterReserves} / ${maxWater} L`;
+            document.getElementById("water-bar").style.width = `${(waterReserves / maxWater) * 100}%`;
+            document.getElementById("energy-text").innerText = `${solarEnergy} / ${maxEnergy} Wh`;
+            document.getElementById("energy-bar").style.width = `${(solarEnergy / maxEnergy) * 100}%`;
+            document.getElementById("hope-text").innerText = `${hopeLevel} / ${maxHope}`;
+            document.getElementById("hope-bar").style.width = `${(hopeLevel / maxHope) * 100}%`;
+            document.getElementById("coins-text").innerText = `${userCoins} Coins`;
+            document.getElementById("cactus-counter").innerText = `${cactusAmmo} / 100`;
+        }
+
+        function addPlantsToDropdown(plants) {
+            const select = document.getElementById("crop-selector");
+            select.innerHTML = "";
+            plants.forEach(([name, emoji, cost]) => {
+                const option = document.createElement("option");
+                option.value = name;
+                option.textContent = `${emoji} ${name} (${cost}c)`;
+                select.appendChild(option);
+            });
+        }
+
+        function buyWaterRefill() {
+            const WATER_COST = 15;
+            const WATER_AMOUNT = 100;
+
+            if (waterReserves >= maxWater) {
+                showToast("💧 Your water reserves are already full!");
+                return;
+            }
+
+            if (userCoins < WATER_COST) {
+                showToast("❌ Not enough coins to buy water!");
+                return;
+            }
+
+            userCoins -= WATER_COST;
+            waterReserves = Math.min(maxWater, waterReserves + WATER_AMOUNT);
+            updateResources(waterReserves, 90, solarEnergy, hopeLevel, userCoins);
+
+            pushAction(`Bought +100L Water (-${WATER_COST}c)`);
+            showToast(`🪣 Bought +100L Water for 15 Coins!`);
+        }
+
+        // PLANTING LOGIC
+        function plantSeedInPlot(index) {
+            const selectedPlantName = document.getElementById("crop-selector").value;
+            if (!selectedPlantName) {
+                showToast("Please unlock/select a seed from your bag first!");
+                return;
+            }
+
+            const plantData = seedDatabase[selectedPlantName] || { emoji: "🌱", cost: 20 };
+
+            if (userCoins < plantData.cost) {
+                showToast("❌ Not enough coins to buy this seed!");
+                return;
+            }
+
+            userCoins -= plantData.cost;
+            updateResources(waterReserves, 90, solarEnergy, hopeLevel, userCoins);
+
+            updateGrowthProcess("plant", selectedPlantName);
+            gardenGridState[index] = {
+                name: selectedPlantName,
+                cost: plantData.cost,
+                emoji: plantData.emoji,
+                stage: 0,
+                isZombie: false,
+                isDry: false,
+                waterTimer: null,
+                waterTimeLeft: 5,  // ⚡ UPDATED: 5s El Nino Timer
+                zombieTimer: null,
+                zombieTimeLeft: 10, // ⚡ UPDATED: 10s Harvest Timer
+                shootTimer: null,
+                shootTimeLeft: 10  // ⚡ UPDATED: 10s Shooting Timer
+            };
+
+            pushAction(`Bought & Planted ${selectedPlantName} (-${plantData.cost}c)`);
+            startWaterTimer(index);
+            renderGarden();
+        }
+
+        // ☀️ EL NIÑO WATER TIMER (5 Seconds)
+        function startWaterTimer(index) {
+            const tile = gardenGridState[index];
+            if (!tile) return;
+
+            tile.waterTimeLeft = 5; // 5 seconds
+            if (tile.waterTimer) clearInterval(tile.waterTimer);
+
+            tile.waterTimer = setInterval(() => {
+                if (!gardenGridState[index] || gardenGridState[index] !== tile || tile.stage === 2 || tile.isZombie) {
+                    clearInterval(tile.waterTimer);
+                    return;
+                }
+
+                tile.waterTimeLeft--;
+                renderGarden();
+
+                if (tile.waterTimeLeft <= 0) {
+                    clearInterval(tile.waterTimer);
+                    triggerElNinoForTile(index);
+                }
+            }, 1000);
+        }
+
+        function triggerElNinoForTile(index) {
+            const tile = gardenGridState[index];
+            if (!tile) return;
+
+            tile.isDry = true;
+            showToast(`☀️ El Niño dried up your ${tile.name}!`);
+
+            const banner = document.getElementById("weather-banner");
+            document.getElementById("weather-icon").innerText = "☀️🔥";
+            document.getElementById("weather-title").innerText = "El Niño Drought Hit!";
+            document.getElementById("weather-desc").innerText = "Plant dried up! Unwatered for 5 seconds.";
+            banner.className = "elnino-panel rounded-xl p-3 flex items-center justify-between text-white mb-4 shadow-md transition-all";
+
+            renderGarden();
+
+            setTimeout(() => {
+                document.getElementById("weather-icon").innerText = "☀️";
+                document.getElementById("weather-title").innerText = "Fast-Paced Gardening!";
+                document.getElementById("weather-desc").innerText = "Water in 5s or El Niño strikes! Harvest/shoot in 10s!";
+                banner.className = "sky-panel rounded-xl p-3 flex items-center justify-between text-gray-800 mb-4 shadow-md transition-all";
+            }, 4000);
+        }
+
+        // WATERING & GROWTH
+        function waterPlant(index) {
+            const tile = gardenGridState[index];
+            if (!tile || tile.isZombie || tile.isDry) return;
+
+            if (waterReserves < 15) {
+                showToast("❌ Water empty! Click 'Buy Water' in Storage.");
+                return;
+            }
+
+            waterReserves -= 15;
+            updateResources(waterReserves, 90, solarEnergy, hopeLevel, userCoins);
+
+            updateGrowthProcess("water", tile.name);
+            if (tile.stage < 2) {
+                tile.stage++;
+                pushAction(`Watered ${tile.name} (Stage ${tile.stage})`);
+
+                if (tile.stage === 2) {
+                    updateGrowthProcess("mature", tile.name);
+                    if (tile.waterTimer) clearInterval(tile.waterTimer);
+                    startHarvestZombieTimer(index);
+                } else {
+                    updateGrowthProcess("seedling", tile.name);
+                    startWaterTimer(index); // Reset 5s timer for next growth stage
+                }
+            }
+            renderGarden();
+        }
+
+        // HARVEST COUNTDOWN TO ZOMBIE (10 Seconds)
+        function startHarvestZombieTimer(index) {
+            const tile = gardenGridState[index];
+            if (!tile) return;
+
+            tile.zombieTimeLeft = 10; // 10 seconds
+            tile.zombieTimer = setInterval(() => {
+                if (!gardenGridState[index] || gardenGridState[index] !== tile || tile.isZombie) {
+                    clearInterval(tile.zombieTimer);
+                    return;
+                }
+
+                tile.zombieTimeLeft--;
+                renderGarden();
+
+                if (tile.zombieTimeLeft <= 0) {
+                    clearInterval(tile.zombieTimer);
+                    turnIntoZombie(index);
+                }
+            }, 1000);
+        }
+
+        // ZOMBIE CREATION & SHOOT TIMER (10 Seconds)
+        function turnIntoZombie(index) {
+            const tile = gardenGridState[index];
+            if (!tile) return;
+
+            tile.isZombie = true;
+            tile.shootTimeLeft = 10; // 10s Shoot Window
+            zombieCount++;
+            document.getElementById("zombie-counter").innerText = `${zombieCount} / 3`;
+            showToast(`🧟 Zombie ate your ${tile.name}! Shoot with 🌵 in 10s!`);
+
+            renderGarden();
+
+            if (zombieCount >= 3) {
+                triggerTyphoonWipeout();
+            } else {
+                startZombieShootTimer(index);
+            }
+        }
+
+        // ZOMBIE WANDER TIMER (If not shot in 10s)
+        function startZombieShootTimer(index) {
+    const tile = gardenGridState[index];
+    if (!tile) return;
+
+    tile.shootTimer = setInterval(() => {
+        // Stop timer if the tile was already cleared/shot
+        if (!gardenGridState[index] || gardenGridState[index] !== tile || !tile.isZombie) {
+            clearInterval(tile.shootTimer);
+            return;
+        }
+
+        tile.shootTimeLeft--;
+        renderGarden();
+
+        if (tile.shootTimeLeft <= 0) {
+            clearInterval(tile.shootTimer);
+            tile.shootTimer = null;
+            zombieWanderAndEat(index); // Trigger expiration
+        }
+    }, 1000);
+}
+
+function zombieWanderAndEat(fromIndex) {
+    const oldTile = gardenGridState[fromIndex];
+    
+    // Clear interval safeguard
+    if (oldTile && oldTile.shootTimer) {
+        clearInterval(oldTile.shootTimer);
+    }
+
+    // REMOVE THE OLD ZOMBIE IMMEDIATELY FROM THE GRID
+    gardenGridState[fromIndex] = null; 
+    zombieCount = Math.max(0, zombieCount - 1);
+    
+    // REDUCE HOPE (-15)
+    hopeLevel = Math.max(0, hopeLevel - 15);
+    updateResources(waterReserves, 90, solarEnergy, hopeLevel, userCoins);
+
+    // Find all living plants remaining on the grid
+    const livingIndices = [];
+    gardenGridState.forEach((t, i) => {
+        if (t && !t.isZombie && !t.isDry) livingIndices.push(i);
+    });
+
+    if (livingIndices.length > 0) {
+        // Pick a random remaining plant, eat it, and spawn a new zombie there
+        const targetIndex = livingIndices[Math.floor(Math.random() * livingIndices.length)];
+        showToast(`🧟 Zombie escaped, ate a plant at plot #${targetIndex + 1}, and damaged Hope (-15)!`);
+        turnIntoZombie(targetIndex);
+    } else {
+        // If no plants are left, zombie just disappears completely
+        showToast(`🧟 Zombie vanished, but damaged your Hope (-15)!`);
+    }
+
+    renderGarden();
+}
+
+        // 🌵 SHOOT ZOMBIE WITH CACTUS (10c)
+        function shootZombie(index) {
+            const tile = gardenGridState[index];
+            if (!tile || !tile.isZombie) return;
+
+            if (cactusAmmo <= 0) {
+                showToast("❌ Out of Cactus Ammo!");
+                return;
+            }
+
+            if (userCoins < 10) {
+                showToast("❌ Shooting costs 10 Coins!");
+                return;
+            }
+
+            userCoins -= 10;
+            cactusAmmo -= 1;
+            zombieCount = Math.max(0, zombieCount - 1);
+            updateResources(waterReserves, 90, solarEnergy, hopeLevel, userCoins);
+
+            if (tile.shootTimer) clearInterval(tile.shootTimer);
+            gardenGridState[index] = null;
+
+            pushAction(`Shot Zombie at Plot #${index + 1} (-10c, -1🌵)`);
+            showToast(`🌵 Shot and killed zombie at plot #${index + 1}!`);
+
+            renderGarden();
+        }
+
+        function harvestPlant(index) {
+            const tile = gardenGridState[index];
+            if (!tile || tile.stage < 2 || tile.isZombie || tile.isDry) return;
+
+            if (tile.zombieTimer) clearInterval(tile.zombieTimer);
+
+            const earned = tile.cost * 2;
+            userCoins += earned;
+            updateResources(waterReserves, 90, solarEnergy, hopeLevel, userCoins);
+
+            pushAction(`Harvested ${tile.name} (+${earned}c)`);
+            updateGrowthProcess("harvest", tile.name);
+            showToast(`🌾 Harvested ${tile.name} for +${earned} Coins!`);
+
+            gardenGridState[index] = null;
+            renderGarden();
+        }
+
+        // 🌧️ TYPHOON WIPEOUT (3 Zombies)
+        function triggerTyphoonWipeout() {
+            const banner = document.getElementById("weather-banner");
+            document.getElementById("weather-icon").innerText = "🌧️⚡";
+            document.getElementById("weather-title").innerText = "Typhoon Disaster Wipeout!";
+            document.getElementById("weather-desc").innerText = "3 Zombies overran the garden! Typhoon wiped out all crops!";
+            banner.className = "rain-panel rounded-xl p-3 flex items-center justify-between text-white mb-4 shadow-md transition-all";
+
+            gardenGridState.forEach((tile, i) => {
+                if (tile) {
+                    if (tile.waterTimer) clearInterval(tile.waterTimer);
+                    if (tile.zombieTimer) clearInterval(tile.zombieTimer);
+                    if (tile.shootTimer) clearInterval(tile.shootTimer);
+                }
+                gardenGridState[i] = null;
+            });
+
+            zombieCount = 0;
+            document.getElementById("zombie-counter").innerText = `0 / 3`;
+
+            showToast("🌩️ Typhoon wiped out your garden!");
+            renderGarden();
+
+            setTimeout(() => {
+                document.getElementById("weather-icon").innerText = "☀️";
+                document.getElementById("weather-title").innerText = "Fast-Paced Gardening!";
+                document.getElementById("weather-desc").innerText = "Water in 5s or El Niño strikes! Harvest/shoot in 10s!";
+                banner.className = "sky-panel rounded-xl p-3 flex items-center justify-between text-gray-800 mb-4 shadow-md transition-all";
+            }, 6000);
+        }
+
+        function renderGarden() {
+            const grid = document.getElementById("garden-grid");
+            grid.innerHTML = "";
+
+            for (let i = 0; i < 25; i++) {
+                const tile = gardenGridState[i];
+                const cell = document.createElement("div");
+                cell.className = "aspect-square bg-[#36241C] rounded-xl flex flex-col items-center justify-between p-1 border border-[#5D4037] relative shadow-inner overflow-hidden";
+
+                if (!tile) {
+                    cell.innerHTML = `
+                        <div class="flex-1 flex items-center justify-center text-2xl cursor-pointer hover:scale-110 transition-transform" onclick="plantSeedInPlot(${i})">🟫</div>
+                        <span class="text-[9px] text-amber-400/60 font-semibold">Plant</span>
+                    `;
+                } else if (tile.isZombie) {
+                    cell.innerHTML = `
+                        <div class="text-xl animate-bounce mt-1">🧟</div>
+                        <div class="text-[9px] text-red-400 font-mono font-bold">${tile.shootTimeLeft}s</div>
+                        <button onclick="shootZombie(${i})" class="w-full bg-red-800 hover:bg-red-700 text-white text-[9px] font-bold py-0.5 rounded border border-red-500 flex items-center justify-center gap-0.5 mt-0.5">
+                            🌵 Shoot (10c)
+                        </button>
+                    `;
+                } else if (tile.isDry) {
+                    cell.innerHTML = `
+                        <div class="flex-1 flex items-center justify-center text-2xl">🍂</div>
+                        <button onclick="gardenGridState[${i}]=null; renderGarden();" class="w-full bg-amber-900 hover:bg-amber-800 text-amber-200 text-[9px] font-bold py-0.5 rounded">
+                            🗑️ Clear
+                        </button>
+                    `;
+                } else {
+                    let displayEmoji = "🌱";
+                    if (tile.stage === 1) displayEmoji = "🌿";
+                    if (tile.stage === 2) displayEmoji = tile.emoji;
+
+                    cell.innerHTML = `
+                        <div class="text-xl mt-1">${displayEmoji}</div>
+                        <div class="text-[9px] text-amber-300 font-mono font-bold">
+                            ${tile.stage < 2 ? `💧${tile.waterTimeLeft}s` : `⏳${tile.zombieTimeLeft}s`}
+                        </div>
+                        <div class="w-full mt-1">
+                            ${tile.stage < 2 ? `
+                                <button onclick="waterPlant(${i})" class="w-full bg-cyan-800 hover:bg-cyan-700 text-cyan-100 text-[9px] font-bold py-0.5 rounded flex items-center justify-center gap-0.5">
+                                    🪣 Water
+                                </button>
+                            ` : `
+                                <button onclick="harvestPlant(${i})" class="w-full bg-emerald-700 hover:bg-emerald-600 text-emerald-100 text-[9px] font-bold py-0.5 rounded flex items-center justify-center gap-0.5">
+                                    🌾 Harvest
+                                </button>
+                            `}
+                        </div>
+                    `;
+                }
+                grid.appendChild(cell);
+            }
+        }
+
+        function pushAction(action) {
+            actionStack.push(action);
+            if (actionStack.length > 8) actionStack.shift();
+            renderActionStack();
+        }
+
+        function renderActionStack() {
+            const container = document.getElementById("action-stack");
+            container.innerHTML = "";
+            [...actionStack].reverse().forEach(act => {
+                const div = document.createElement("div");
+                div.className = "bg-[#1A100C] border-l-2 border-amber-500 px-2.5 py-1.5 rounded text-[11px] text-amber-200";
+                div.textContent = `→ ${act}`;
+                container.appendChild(div);
+            });
+        }
+
+        function triggerUndo() {
+            if (actionStack.length > 0) {
+                const undone = actionStack.pop();
+                renderActionStack();
+                showToast(`Undid: ${undone}`);
+            } else {
+                showToast("Action stack is empty.");
+            }
+        }
+
+        function renderClimateQueue() {
+            const container = document.getElementById("climate-queue");
+            container.innerHTML = `
+                <div class="p-2.5 bg-[#1A100C] border border-amber-900 rounded-xl text-xs">
+                    <div class="font-bold text-amber-400">El Niño & Typhoon Risks</div>
+                    <div class="text-amber-300/70 text-[10px]">Active FIFO Weather Warnings</div>
+                </div>
+            `;
+        }
+
+        function showToast(msg) {
+            const toast = document.createElement("div");
+            toast.className = "fixed bottom-6 right-6 bg-amber-900 border border-amber-500 text-amber-100 px-4 py-2.5 rounded-xl shadow-2xl z-50 text-xs font-semibold";
+            toast.textContent = msg;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 2500);
+        }
+
+        async function runPythonCode() {
+            await initPyodide();
+            const code = document.getElementById("code-editor").value.trim();
+            const key = parseInt(document.getElementById("topic-selector").value);
+            const consoleEl = document.getElementById("output-console");
+      
+            consoleEl.innerHTML = `<span class="text-amber-400">Running Python script...</span><br>`;
+      
+            try {
+                await pyodideInstance.runPythonAsync(code);
+           
+                if (key === 1 && code.includes("addPlantsToDropdown")) {
+                    unlockFeature("resources");
+                    pushAction("Resources & Seed Bag Initialized");
+                }
+                if (key === 2 && code.includes("ActionHistoryStack")) {
+                    unlockFeature("stack");
+                }
+                if (key === 3 && code.includes("ClimateQueue")) {
+                    unlockFeature("queue");
+                }
+                if (key === 4) {
+                    unlockFeature("grid");
+                }
+            } catch (err) {
+                consoleEl.innerHTML += `<span class="text-red-400">Error: ${err.message}</span>`;
+            }
+        }
+
+        const topicTemplates = {
+            1: {
+                title: "Resource Storage and Seed Bag",
+                code: `
+# ==========================================
+# 1. RESOURCE STORAGE & SEED BAG (OOP)
+# ==========================================
+
+class Plant:
+    def __init__(self, name, category, buy_cost, base_value, water_need):
+        self.name = name
+        self.category = category
+        self.buy_cost = buy_cost
+        self.base_value = base_value
+        self.water_need = water_need
+
+updateResources(water=500, seeds=90, energy=100, hope=100, coins=200)
+
+addPlantsToDropdown([
+    ("Tulip", "🌷", 20),
+    ("Cherry Blossom", "🌸", 35),
+    ("Sunflower", "🌻", 15),
+    ("Tomato", "🍅", 25),
+    ("Onion", "🧅", 15),
+    ("Eggplant", "🍆", 30),
+    ("Strawberry", "🍓", 30),
+    ("Watermelon", "🍉", 50),
+    ("Mango", "🥭", 45)
+])
+
+print("Resource Storage & OOP Seed Bag initialized successfully!")
+`
+            },
+            2: {
+                title: "Action History (Stack)",
+                code: `
+class ActionHistoryStack:
+    def __init__(self):
+        self.stack = []
+
+    def push_action(self, action_string):
+        self.stack.append(action_string)
+        pushAction(action_string)
+
+history = ActionHistoryStack()
+history.push_action("Garden initialized")
+print("Action History Stack ready!")
+`
+            },
+            3: {
+                title: "Climate Queue (FIFO)",
+                code: `
+from collections import deque
+
+class ClimateQueue:
+    def __init__(self):
+        self.queue = deque()
+
+    def add_challenge(self, event_name):
+        self.queue.append(event_name)
+
+q = ClimateQueue()
+q.add_challenge("El Niño")
+q.add_challenge("Typhoon")
+
+updateClimateQueue(list(q.queue))
+print("Climate Queue (FIFO) ready!")
+`
+            },
+            4: {
+                title: "2D Lists and Arrays",
+                code: `
+garden_grid = [[None]*5 for _ in range(5)]
+print("Garden Grid (2D List) initialized!")
+`
+            },
+            5: {
+                title: "Hierarchical Trees and Traversals",
+                code: `
+class SeedTreeNode:
+    def __init__(self, name):
+        self.name = name
+        self.children = []
+
+root_seed = SeedTreeNode("Seeds")
+print("Hierarchical Seed Tree ready!")
+`
+            }
+        };
+
+
+        // Planting & Growth Process visual state — uses existing gameplay actions only.
+        let growthState = "choose";
+        function updateGrowthProcess(state, plantName="") {
+            const order = ["buy","choose","plant","water","seedling","growing","mature","harvest"];
+            const index = Math.max(0, order.indexOf(state));
+            document.querySelectorAll(".growth-stage").forEach(el => {
+                const key = el.dataset.growth;
+                const i = order.indexOf(key);
+                el.classList.toggle("active", key === state);
+                el.classList.toggle("done", i < index);
+            });
+            const status = document.getElementById("growth-status");
+            if (status) status.textContent = plantName ? `${plantName} — ${stateLabel(state)}` : stateLabel(state);
+            growthState = state;
+        }
+        function stateLabel(state) {
+            return ({buy:"Seed purchase step", choose:"Choose a seed from the Seed Bag", plant:"Seed planted in the garden", water:"Water the planted seed", seedling:"Seedling stage", growing:"Growing plant stage", mature:"Mature plant — ready to harvest", harvest:"Harvest completed"})[state] || "Choose a seed to begin.";
+        }
+        document.addEventListener("change", e => {
+            if (e.target && e.target.id === "crop-selector" && e.target.value) updateGrowthProcess("choose", e.target.value);
+        });
+
+        // Seed hierarchy traversal demonstration.
+        const seedTree = {
+            name:"Seeds", children:[
+                {name:"Flowers", children:[{name:"Tulip",children:[]},{name:"Cherry Blossom",children:[]},{name:"Sunflower",children:[]}]},
+                {name:"Vegetables", children:[{name:"Tomato",children:[]},{name:"Onion",children:[]},{name:"Eggplant",children:[]}]},
+                {name:"Fruits", children:[{name:"Strawberry",children:[]},{name:"Watermelon",children:[]},{name:"Mango",children:[]}]}
+            ]
+        };
+        let traversalMode="bfs", traversalOrder=[], traversalIndex=-1, traversalTimer=null;
+        function bfs(root){ const out=[], q=[root]; while(q.length){const n=q.shift(); out.push(n.name); n.children.forEach(c=>q.push(c));} return out; }
+        function preorder(n,out=[]){ out.push(n.name); n.children.forEach(c=>preorder(c,out)); return out; }
+        function inorder(n,out=[]){ if(!n.children.length){out.push(n.name);return out;} inorder(n.children[0],out); out.push(n.name); n.children.slice(1).forEach(c=>inorder(c,out)); return out; }
+        function postorder(n,out=[]){ n.children.forEach(c=>postorder(c,out)); out.push(n.name); return out; }
+        function setTraversal(mode){
+            stopTraversal(); traversalMode=mode; traversalIndex=-1;
+            traversalOrder = mode==="bfs" ? bfs(seedTree) : mode==="preorder" ? preorder(seedTree) : mode==="inorder" ? inorder(seedTree) : postorder(seedTree);
+            document.querySelectorAll(".traversal-btn").forEach(b=>b.classList.remove("bg-amber-700","border-amber-500","text-amber-100"));
+            const active=document.getElementById(`tr-btn-${mode}`); if(active) active.classList.add("bg-amber-700","border-amber-500","text-amber-100");
+            resetTraversal(false);
+            const label={bfs:"BFS",preorder:"DFS Preorder",inorder:"DFS Inorder",postorder:"DFS Postorder"}[mode];
+            document.getElementById("traversal-sequence").innerHTML=`<strong>${label}:</strong> ${traversalOrder.join(" → ")}`;
+        }
+        function renderTraversalHighlight(){
+            document.querySelectorAll("[data-tr-node]").forEach(n=>{n.classList.remove("visited","current"); const pos=traversalOrder.indexOf(n.dataset.trNode); if(pos!==-1 && pos<=traversalIndex)n.classList.add("visited"); if(pos===traversalIndex)n.classList.add("current");});
+            const current=traversalOrder[traversalIndex]; document.getElementById("traversal-current").innerHTML=current?`<strong>Current:</strong> Visit #${traversalIndex+1} — ${current}`:`<strong>Current:</strong> Ready to traverse`;
+        }
+        function traversalNext(){ if(traversalIndex<traversalOrder.length-1){traversalIndex++;renderTraversalHighlight();} else stopTraversal(); }
+        function toggleTraversalPlay(){ if(traversalTimer){stopTraversal();return;} const btn=document.getElementById("tr-play-btn"); btn.textContent="⏸ Pause"; traversalTimer=setInterval(()=>{if(traversalIndex>=traversalOrder.length-1){stopTraversal();return;} traversalNext();},850); }
+        function stopTraversal(){ if(traversalTimer){clearInterval(traversalTimer);traversalTimer=null;} const btn=document.getElementById("tr-play-btn"); if(btn) btn.textContent="▶ Play"; }
+        function resetTraversal(showReady=true){ stopTraversal(); traversalIndex=-1; renderTraversalHighlight(); if(showReady) document.getElementById("traversal-sequence").innerHTML=`<strong>${traversalMode.toUpperCase()}:</strong> ${traversalOrder.join(" → ")}`; }
+        function initTraversal(){ setTraversal("bfs"); }
+
+        function loadTopic() {
+            const key = document.getElementById("topic-selector").value;
+            document.getElementById("code-editor").value = savedCode[key] || topicTemplates[key].code;
+        }
+
+        function switchTab(tab) {
+            document.getElementById("view-game").classList.toggle("hidden", tab !== "game");
+            document.getElementById("view-code").classList.toggle("hidden", tab !== "code");
+            document.getElementById("tab-game").classList.toggle("bg-[#4A3228]", tab === "game");
+            document.getElementById("tab-code").classList.toggle("bg-[#4A3228]", tab === "code");
+        }
+
+        window.onload = () => {
+            lucide.createIcons();
+            renderGarden();
+            renderClimateQueue();
+            renderActionStack();
+            updateResources();
+            initTraversal();
+            updateGrowthProcess("choose");
+      
+            const select = document.getElementById("topic-selector");
+            Object.keys(topicTemplates).forEach(k => {
+                let opt = document.createElement("option");
+                opt.value = k;
+                opt.textContent = topicTemplates[k].title;
+                select.appendChild(opt);
+            });
+            loadTopic();
+            switchTab('game');
+        };
+    </script>
+</body>
+</html>
